@@ -21,6 +21,8 @@ import { checkViewValidity } from "./utils";
 import Ajv from "ajv";
 import schema from "../graph-data/graph.schema.json";
 
+
+
 const schemaValidator = new Ajv().compile(schema);
 
 const cors_proxy = import.meta.env.VITE_CORS_PROXY || "";
@@ -52,15 +54,37 @@ const getSubordinateStatement = async (
   return subordinate;
 };
 
+//aggiunta gestione tipo di entita
+type FederationRole = "RP" | "OP" | "TA";
+
+const ROLE_TO_HOST: Record<FederationRole, string> = {
+  OP: "cie-provider.org:8002",
+  RP: "relying-party.org:8001",
+  TA: "trust-anchor.org:8000", 
+};
+
+const resolveHostForEntity = (payload: EntityConfigurationPayload): string => {
+  const metadata = payload.metadata as Record<string, unknown>;
+
+  if (metadata.openid_provider) return ROLE_TO_HOST.OP;
+  if (metadata.openid_relying_party) return ROLE_TO_HOST.RP;
+
+  return ROLE_TO_HOST.TA;
+};
+
+
 const getEntityConfigurations = async (
   subject: string,
   wellKnownEndpoint: string = ".well-known/openid-federation",
 ): Promise<EntityConfiguration> => {
   const subjectWellKnown = subject.endsWith("/") ? subject : subject + "/";
 
-  const { data: jwt } = await axios.get(
+
+  const response = await axios.get( 
     cors_proxy + subjectWellKnown + wellKnownEndpoint,
   );
+  const jwt = response.data;
+
 
   const header = jose.decodeProtectedHeader(jwt) as JWTHeader;
   const payload = jose.decodeJwt(jwt) as EntityConfigurationPayload;
@@ -80,6 +104,21 @@ const getEntityConfigurations = async (
     subordinates: {},
   };
   await validateEntityConfiguration(ec);
+  // aggancia i dati HTTP all'oggetto già esistente
+  ec._httpCapture = {
+    url: response.config.url ?? cors_proxy + subjectWellKnown + wellKnownEndpoint,
+    method: (response.config.method ?? "GET").toUpperCase(),
+    requestHeaders: {
+    ...(response.config.headers as Record<string, string>),
+    Host: resolveHostForEntity(payload), // gestione entita
+    },
+    status: response.status,
+    statusText: response.statusText,
+    responseHeaders: response.headers as Record<string, string>,
+    body: jwt,
+  };
+
+ // console.log("[DEBUG] _httpCapture assegnato:", ec._httpCapture); 
 
   return ec;
 };

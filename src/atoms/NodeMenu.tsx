@@ -1,4 +1,5 @@
 import React from "react";
+import axios from "axios";
 import { AccordionAtom } from "./Accordion";
 import { JWTViewer } from "./JWTViewer";
 import { InfoView } from "../atoms/InfoView";
@@ -60,6 +61,24 @@ export const NodeMenuAtom = ({
   );
   const [advancedParams, setAdvancedParams] = useState<boolean>(false);
   const [display, setDisplay] = useState(true);
+
+  const [protocols, setProtocols] = useState<string[]>([]);
+  const [selectedProtocol, setSelectedProtocol] = useState<string>("");
+
+  useEffect(() => {
+    const fetchProtocols = async () => {
+      try {
+        const response = await axios.get("http://localhost:8080/api/tests/selectprotocol");
+        setProtocols(response.data);
+        if (response.data && response.data.length > 0) {
+          setSelectedProtocol(response.data[0]);
+        }
+      } catch (error) {
+        console.error("Errore nel recupero dei protocolli:", error);
+      }
+    };
+    fetchProtocols();
+  }, []);
 
   const removeEntities = (entityIDs: string[]) => onNodesRemove(entityIDs);
 
@@ -181,6 +200,8 @@ export const NodeMenuAtom = ({
     ["entity_type_label", getEntityTypes(data.info.ec.payload).join(", ")],
   ];
 
+  console.log("entity type label", data.info.ec.payload.metadata);
+
   return (
     <>
       <div className="row" data-testid="node-context-sidebar">
@@ -191,10 +212,51 @@ export const NodeMenuAtom = ({
               labelId="node_info"
               show={true}
               hiddenElement={
-                <InfoView
-                  id={`${data.info.ec.entity}-view`}
-                  infos={displayedInfo}
-                />
+                <>
+                  <InfoView
+                    id={`${data.info.ec.entity}-view`}
+                    infos={displayedInfo}
+                  />
+                  
+                  {/* Selezione Protocollo */}
+                  <div style={{ marginTop: "16px", padding: "12px", borderTop: "1px solid #dee2e6" }}>
+                    <label style={{  marginBottom: "12px", display: "block" }}>
+                      Selezione Protocollo:
+                    </label>
+                    
+                    {protocols.length === 0 ? (
+                      <span style={{ color: "#6c757d", fontSize: "0.5em" }}>Caricamento...</span>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                        {protocols.map((prot, i) => (
+                          <div key={i} style={{ paddingLeft: "1rem" }}>
+                            <input
+                              type="radio"
+                              name="protocolSelection" 
+                              id={`protocol-${i}`}
+                              value={prot}
+                              checked={selectedProtocol === prot}
+                              onChange={(e) => setSelectedProtocol(e.target.value)}
+                              style={{ 
+                                cursor: "pointer", 
+                                transform: "scale(0.9)", 
+                                margin: "0",
+                                accentColor: "#007bff"
+                              }}
+                            />
+                            <label 
+                              className="form-check-label" 
+                              htmlFor={`protocol-${i}`} 
+                              style={{ fontWeight: "normal", cursor: "pointer", margin: 0, paddingLeft: "13px", fontSize: "0.9em" }}
+                            >
+                              {prot}
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
               }
             />
           )}
@@ -311,6 +373,8 @@ export const NodeMenuAtom = ({
                 headerValidationFn={validateHeaderEntityConfiguration}
                 schemaUrl={`${import.meta.env.VITE_ENTITY_CONFIG_SCHEMA}`}
                 headerSchemaUrl={`${import.meta.env.VITE_ENTITY_HEADER_SCHEMA}`}
+                httpCapture={data.info.ec._httpCapture}
+                selectedProtocol={selectedProtocol}
               />
             }
           />

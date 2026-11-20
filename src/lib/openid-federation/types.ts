@@ -80,6 +80,16 @@ export interface EntityConfigurationPayload {
   trust_marks: Record<string, string>[] | undefined;
 }
 
+export interface HttpCapturePayload {
+  url: string;
+  method: string;
+  requestHeaders: Record<string, string>;
+  status: number;
+  statusText: string;
+  responseHeaders: Record<string, string>;
+  body: string;
+}
+
 export interface EntityConfiguration {
   entity: string;
   jwt: string;
@@ -89,6 +99,7 @@ export interface EntityConfiguration {
   invalidReason?: string;
   subordinates: Record<string, SubordianteStatement>;
   startNode?: boolean;
+  _httpCapture?: HttpCapturePayload;
 }
 
 export interface NodeInfo {

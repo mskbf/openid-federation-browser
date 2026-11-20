@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import style from "../css/ContextMenu.module.css";
 import { IconAtom } from "./Icon";
 import { FormattedMessage } from "react-intl";
 import { CodeViewer } from "./CodeViewer";
+import axios from "axios";
+import { HttpCapturePayload } from "../lib/openid-federation/types";  
 
-type SchemaValidity = "UNKNOWN" | "VALID" | "INVALID";
 
 export interface ECViewerProps {
   id: string;
@@ -15,28 +16,69 @@ export interface ECViewerProps {
   headerValidationFn?: (header: object) => Promise<[boolean, string | undefined]>;
   schemaUrl?: string;
   headerSchemaUrl?: string;
+  httpCapture?: HttpCapturePayload;
+  selectedProtocol?: string;
 }
+
+export interface ApiTest {
+  testName: string;
+  description: string;
+  applicable: boolean;
+  type: string;
+  message: string;
+}
+
 
 export const JWTViewer = ({
   id,
   raw,
   decodedPayload,
   decodedHeader,
-  validationFn,
-  headerValidationFn,
-  schemaUrl,
-  headerSchemaUrl,
+  httpCapture,
+  selectedProtocol
 }: ECViewerProps) => {
-  const [schemaValidity, setSchemaValidity] =
-    useState<SchemaValidity>("UNKNOWN");
-  const [validationError, setValidationError] = useState<string | undefined>(
-    undefined,
-  );
-  const [headerSchemaValidity, setHeaderSchemaValidity] =
-    useState<SchemaValidity>("UNKNOWN");
-  const [headerValidationError, setHeaderValidationError] = useState<string | undefined>(
-    undefined,
-  );
+  
+  const [apiTests, setApiTests] = useState<ApiTest[]>([]);
+  const [hasValidated, setHasValidated] = useState(false); 
+  const [sendStatus, setSendStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  
+  const handleSendToApi = useCallback(async () => {
+    if (!httpCapture) return;
+    
+    setSendStatus("sending");
+    setHasValidated(false); 
+    
+    try {
+
+      const payloadToSend = {
+        ...httpCapture,
+        protocol: selectedProtocol 
+      };
+
+      const response = await axios.post("http://localhost:8080/api/tests/openidfederationbrowser", payloadToSend, {
+        headers: { "Content-Type": "application/json" },
+      });
+      
+      console.log("[DEBUG] Risposta API completa:", response.data);
+      
+      setSendStatus("sent");
+      setTimeout(() => setSendStatus("idle"), 2000);
+
+      const testsList = response.data?.tests || [];
+      setApiTests(testsList);
+      setHasValidated(true); 
+      
+    } catch { 
+      setSendStatus("error");
+      setHasValidated(false);
+    }
+  }, [httpCapture, selectedProtocol]); 
+
+  useEffect(() => {
+    if (httpCapture) {
+      handleSendToApi();
+    }
+  }, [httpCapture, handleSendToApi]);
 
   const decodedPayloadStr = JSON.stringify(decodedPayload, null, 4);
   const decodedHeaderStr = JSON.stringify(decodedHeader, null, 4);
@@ -68,117 +110,87 @@ export const JWTViewer = ({
     }
   };
 
-  useEffect(() => {
-    const validateSchema = async () => {
-      if ((!validationFn) && (!headerValidationFn)) return;
+  const headerFailedTests = apiTests.filter(test => {
+    const desc = (test.testName || "").toLowerCase();
+    return (desc.includes("head") || desc.includes("header")) && (test.message || "").toLowerCase().includes("failed");
+  });
 
-      if (validationFn) {
-        const [valid, errors] = await validationFn(decodedPayload);
-        if (valid) {
-          setSchemaValidity("VALID");
-        } else {
-          setSchemaValidity("INVALID");
-          setValidationError(errors);
-        }
-      }
+  const payloadFailedTests = apiTests.filter(test => {
+    const desc = (test.testName || "").toLowerCase();
+    return (desc.includes("body") || desc.includes("payload")) && (test.message || "").toLowerCase().includes("failed");;
+  });
 
-      if (headerValidationFn) {
-        const [validHead, headerrors] = await headerValidationFn(decodedHeader);
-        if (validHead) {
-          setHeaderSchemaValidity("VALID");
-        } else {
-          setHeaderSchemaValidity("INVALID");
-          setHeaderValidationError(headerrors);
-        }
-      }
-    };
+  const headerPassedTests = apiTests.filter(test => {
+    const desc = (test.testName || "").toLowerCase();
+    return (desc.includes("head") || desc.includes("header")) && (test.message || "").toLowerCase().includes("passed");;
+  });
 
-    if (schemaValidity === "UNKNOWN" || headerSchemaValidity === "UNKNOWN") {
-      validateSchema();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [schemaValidity, headerSchemaValidity]);
-
+  const payloadPassedTests = apiTests.filter(test => {
+    const desc = (test.testName || "").toLowerCase();
+    return (desc.includes("body") || desc.includes("payload")) && (test.message || "").toLowerCase().includes("passed");;
+  });
+  
+ // console.log("[DEBUG] JWTViewer id:", id, "httpCapture ricevuto:", httpCapture);
   return (
     <div className="container" style={{ width: "100%", padding: "14px 24px" }}>
       <div className="row" style={{ padding: "8px" }}>
-        {validationFn && (
-          <div className="col">
-            <table
-              style={{ width: "100%", tableLayout: "fixed" }}
-              data-testid={`${id}-schema-validation-table-payload`}
-            >
-              <tbody>
-                <tr>
-                  <td>
-                    <IconAtom
-                      iconID={`${schemaValidity === "VALID" ? "#it-check" : "#it-close"}`}
-                      className={`icon-sm ${schemaValidity === "VALID" ? "icon-success" : "icon-danger"}`}
-                      isRounded={false}
-                    />
-                    <span className={style.contextAccordinText}>
-                      {schemaValidity === "UNKNOWN" ? (
-                        <FormattedMessage id="validate_schema" />
-                      ) : schemaValidity === "VALID" ? (
-                        <FormattedMessage id="valid_schema" />
-                      ) : (
-                        <FormattedMessage id="invalid_schema" />
-                      )}
-                    </span>
-                  </td>
-                  {schemaUrl && (
-                    <td>
-                      <a href={schemaUrl} className={style.contextAccordinText}>
-                        <FormattedMessage id="schema_validation_url" />
-                      </a>
-                    </td>
-                  )}
-                </tr>
-              </tbody>
-            </table>
-            {validationError && (
-              <div className="alert alert-danger" role="alert">
-                <span className={style.contextAccordinText}>
-                  {validationError}
-                </span>
+        {hasValidated && (
+          <div className="col" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {sendStatus.toLowerCase().includes("error") || apiTests[0]?.testName.toLowerCase().includes("error") ? (
+              <div style={{ padding: '10px', color: 'rgba(14, 11, 13, 0.4)', backgroundColor: '#d8b46c', border: '1px solid #c3e6cb', borderRadius: '4px', fontWeight: 'bold' }}>
+                Problemi, chiamare assistenza
               </div>
-            )}
-            <table className="mt-3" style={{ width: "100%", tableLayout: "fixed" }} data-testid={`${id}-schema-validation-table-header`}>
-              <tbody>
-                <tr>
-                  <td>
-                    <IconAtom
-                      iconID={`${headerSchemaValidity === "VALID" ? "#it-check" : "#it-close"}`}
-                      className={`icon-sm ${headerSchemaValidity === "VALID" ? "icon-success" : "icon-danger"}`}
-                      isRounded={false}
-                    />
-                    <span className={style.contextAccordinText}>
-                      {headerSchemaValidity === "UNKNOWN" ? (
-                        <FormattedMessage id="validate_header_schema" />
-                      ) : headerSchemaValidity === "VALID" ? (
-                        <FormattedMessage id="valid_header_schema" />
-                      ) : (
-                        <FormattedMessage id="invalid_header_schema" />
-                      )}
-                    </span>
-                  </td>
-                  {headerSchemaUrl && (
-                    <td>
-                      <a href={headerSchemaUrl} className={style.contextAccordinText}>
-                        <FormattedMessage id="schema_validation_url" />
-                      </a>
-                    </td>
-                  )}
-                </tr>
-              </tbody>
-            </table>
-            {headerValidationError && (
-              <div className="alert alert-danger" role="alert">
-                <span className={style.contextAccordinText}>
-                  {headerValidationError}
-                </span>
+            ) : (
+            headerFailedTests.length === 0 ? (
+              <div style={{ padding: '10px', color: '#155724', backgroundColor: '#d4edda', border: '1px solid #c3e6cb', borderRadius: '4px', fontWeight: 'bold' }}>
+                ✓ Header Valido
               </div>
+            ) : (
+              <details style={{ border: '1px solid #f5c6cb', borderRadius: '4px', background: '#f8d7da' }} open>
+                <summary style={{ padding: '10px', cursor: 'pointer', fontWeight: 'bold', color: '#721c24' }}>
+                  ⚠ Header Non Valido: {headerFailedTests.length} Test Falliti e {headerPassedTests.length} Test Passati
+                </summary>
+                <div style={{ padding: '10px', borderTop: '1px solid #f5c6cb', backgroundColor: '#fff', maxHeight: '200px', overflowY: 'auto' }}>
+                  <ul style={{ margin: 0, paddingLeft: '20px', color: '#721c24' }}>
+                    {headerFailedTests.map((test, index) => (
+                      <li key={index} style={{ marginBottom: '8px' }}>
+                        <strong>{test.testName}</strong><br />
+                        <span style={{ fontSize: '0.9em' }}>{test.description}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </details>
+            )
             )}
+            {sendStatus.toLowerCase().includes("error") || apiTests[0]?.message.toLowerCase().includes("error") ? (
+              <div style={{ padding: '10px', color: 'rgba(14, 11, 13, 0.4)', backgroundColor: '#d8b46c', border: '1px solid #c3e6cb', borderRadius: '4px', fontWeight: 'bold' }}>
+                Problemi, chiamare assistenza
+              </div>
+            ): ( 
+              payloadFailedTests.length === 0 ? (
+              <div style={{ padding: '10px', color: '#155724', backgroundColor: '#d4edda', border: '1px solid #c3e6cb', borderRadius: '4px', fontWeight: 'bold' }}>
+                ✓ Payload Valido
+              </div>
+            ) : (
+              <details style={{ border: '1px solid #f5c6cb', borderRadius: '4px', background: '#f8d7da' }} open>
+                <summary style={{ padding: '10px', cursor: 'pointer', fontWeight: 'bold', color: '#721c24' }}>
+                  ⚠ Payload Non Valido: {payloadFailedTests.length} Test Falliti e {payloadPassedTests.length} Test Passati 
+                </summary>
+                <div style={{ padding: '10px', borderTop: '1px solid #f5c6cb', backgroundColor: '#fff', maxHeight: '200px', overflowY: 'auto' }}>
+                  <ul style={{ margin: 0, paddingLeft: '20px', color: '#721c24' }}>
+                    {payloadFailedTests.map((test, index) => (
+                      <li key={index} style={{ marginBottom: '8px' }}>
+                        <strong>{test.testName}</strong><br />
+                        <span style={{ fontSize: '0.9em' }}>{test.description}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </details>
+            )
+          )}
+
           </div>
         )}
       </div>
@@ -199,6 +211,30 @@ export const JWTViewer = ({
             <span className={style.contextAccordinButton}>Copy raw JWT</span>
           </button>
         </div>
+        {httpCapture && ( 
+          <div className="col-4">
+            <button
+              className="btn btn-primary btn-icon btn-xs py-1 px-1"
+              title="Invia dati ad API"
+              aria-label="Invia dati ad API"
+              onClick={handleSendToApi}
+              disabled={sendStatus === "sending"}
+              data-testid="send-to-api-button"
+            >
+              <IconAtom
+                iconID="#it-upload"
+                className="icon-xs icon-white"
+                isRounded={false}
+              />
+              <span className={style.contextAccordinButton}>
+                {sendStatus === "idle" && "Invia dati ad API"}
+                {sendStatus === "sending" && "Invio..."}
+                {sendStatus === "sent" && "✓ Inviato"}
+                {sendStatus === "error" && "Errore, riprova"}
+              </span>
+            </button>
+          </div>
+        )} 
       </div>
       <div className="row" style={{ padding: "8px" }}>
         <div className="col">
