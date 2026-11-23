@@ -64,18 +64,25 @@ export const NodeMenuAtom = ({
 
   const [protocols, setProtocols] = useState<string[]>([]);
   const [selectedProtocol, setSelectedProtocol] = useState<string>("");
-
+  const [protocolError, setProtocolError] = useState<string | null>(null);
+  
   useEffect(() => {
     const fetchProtocols = async () => {
       try {
+        setProtocolError(null);
         const response = await axios.get("http://localhost:8080/api/tests/selectprotocol");
         setProtocols(response.data);
+
         if (response.data && response.data.length > 0) {
           setSelectedProtocol(response.data[0]);
         }
       } catch (error) {
         console.error("Errore nel recupero dei protocolli:", error);
-      }
+        if (axios.isAxiosError(error) && !error.response) {
+          setProtocolError("API non raggiungibile");
+        } else {
+          setProtocolError("Error");
+        }      }
     };
     fetchProtocols();
   }, []);
@@ -224,7 +231,11 @@ export const NodeMenuAtom = ({
                       Selezione Protocollo:
                     </label>
                     
-                    {protocols.length === 0 ? (
+                   {protocolError ? (
+                    <span style={{ color: "#b45309", fontWeight: "bold", fontSize: "0.9em", backgroundColor: "#ffedd5", border: "1px solid #fdba74", padding: "4px 8px", borderRadius: "4px" }}>                     
+                       ⚠ {protocolError}
+                      </span>
+                    ) : protocols.length === 0 ? (
                       <span style={{ color: "#6c757d", fontSize: "0.5em" }}>Caricamento...</span>
                     ) : (
                       <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>

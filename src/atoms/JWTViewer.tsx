@@ -41,12 +41,14 @@ export const JWTViewer = ({
   const [apiTests, setApiTests] = useState<ApiTest[]>([]);
   const [hasValidated, setHasValidated] = useState(false); 
   const [sendStatus, setSendStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [apiError, setApiError] = useState<string | null>(null);
   
   const handleSendToApi = useCallback(async () => {
     if (!httpCapture) return;
     
     setSendStatus("sending");
     setHasValidated(false); 
+    setApiError(null); 
     
     try {
 
@@ -68,9 +70,14 @@ export const JWTViewer = ({
       setApiTests(testsList);
       setHasValidated(true); 
       
-    } catch { 
+    } catch(error) { 
+      if (axios.isAxiosError(error) && !error.response) {
+        setApiError("API non raggiungibile");
+      } else {
+        setApiError("Error");
+      }
       setSendStatus("error");
-      setHasValidated(false);
+      setHasValidated(true); 
     }
   }, [httpCapture, selectedProtocol]); 
 
@@ -137,8 +144,8 @@ export const JWTViewer = ({
         {hasValidated && (
           <div className="col" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {sendStatus.toLowerCase().includes("error") || apiTests[0]?.testName.toLowerCase().includes("error") ? (
-              <div style={{ padding: '10px', color: 'rgba(14, 11, 13, 0.4)', backgroundColor: '#d8b46c', border: '1px solid #c3e6cb', borderRadius: '4px', fontWeight: 'bold' }}>
-                Problemi, chiamare assistenza
+          <div style={{ padding: '10px', color: '#b45309', backgroundColor: '#ffedd5', border: '1px solid #fdba74', borderRadius: '4px', fontWeight: 'bold' }}>
+                  ⚠ {apiError || "Error"}
               </div>
             ) : (
             headerFailedTests.length === 0 ? (
@@ -164,8 +171,8 @@ export const JWTViewer = ({
             )
             )}
             {sendStatus.toLowerCase().includes("error") || apiTests[0]?.message.toLowerCase().includes("error") ? (
-              <div style={{ padding: '10px', color: 'rgba(14, 11, 13, 0.4)', backgroundColor: '#d8b46c', border: '1px solid #c3e6cb', borderRadius: '4px', fontWeight: 'bold' }}>
-                Problemi, chiamare assistenza
+            <div style={{ padding: '10px', color: '#b45309', backgroundColor: '#ffedd5', border: '1px solid #fdba74', borderRadius: '4px', fontWeight: 'bold' }}>
+                 ⚠ {apiError || "Error"}
               </div>
             ): ( 
               payloadFailedTests.length === 0 ? (
