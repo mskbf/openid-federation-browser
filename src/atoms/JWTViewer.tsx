@@ -18,6 +18,8 @@ export interface ECViewerProps {
   headerSchemaUrl?: string;
   httpCapture?: HttpCapturePayload;
   selectedProtocol?: string;
+  type?: string;
+  entityFederationType?: string;
 }
 
 export interface ApiTest {
@@ -26,6 +28,7 @@ export interface ApiTest {
   applicable: boolean;
   type: string;
   message: string;
+  positionJWT: string;
 }
 
 
@@ -35,7 +38,9 @@ export const JWTViewer = ({
   decodedPayload,
   decodedHeader,
   httpCapture,
-  selectedProtocol
+  selectedProtocol,
+  type,
+  entityFederationType
 }: ECViewerProps) => {
   
   const [apiTests, setApiTests] = useState<ApiTest[]>([]);
@@ -54,7 +59,9 @@ export const JWTViewer = ({
 
       const payloadToSend = {
         ...httpCapture,
-        protocol: selectedProtocol 
+        protocol: selectedProtocol,
+        type: type,
+        entityFederationType: entityFederationType
       };
 
       const response = await axios.post("http://localhost:8080/api/tests/openidfederationbrowser", payloadToSend, {
@@ -79,7 +86,7 @@ export const JWTViewer = ({
       setSendStatus("error");
       setHasValidated(true); 
     }
-  }, [httpCapture, selectedProtocol]); 
+  }, [httpCapture, selectedProtocol, entityFederationType, type]); 
 
   useEffect(() => {
     if (httpCapture) {
@@ -118,22 +125,22 @@ export const JWTViewer = ({
   };
 
   const headerFailedTests = apiTests.filter(test => {
-    const desc = (test.testName || "").toLowerCase();
+    const desc = (test.positionJWT || "").toLowerCase();
     return (desc.includes("head") || desc.includes("header")) && (test.message || "").toLowerCase().includes("failed");
   });
 
   const payloadFailedTests = apiTests.filter(test => {
-    const desc = (test.testName || "").toLowerCase();
+    const desc = (test.positionJWT || "").toLowerCase();
     return (desc.includes("body") || desc.includes("payload")) && (test.message || "").toLowerCase().includes("failed");;
   });
 
   const headerPassedTests = apiTests.filter(test => {
-    const desc = (test.testName || "").toLowerCase();
+    const desc = (test.positionJWT || "").toLowerCase();
     return (desc.includes("head") || desc.includes("header")) && (test.message || "").toLowerCase().includes("passed");;
   });
 
   const payloadPassedTests = apiTests.filter(test => {
-    const desc = (test.testName || "").toLowerCase();
+    const desc = (test.positionJWT || "").toLowerCase();
     return (desc.includes("body") || desc.includes("payload")) && (test.message || "").toLowerCase().includes("passed");;
   });
   

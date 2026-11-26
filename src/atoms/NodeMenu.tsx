@@ -65,6 +65,8 @@ export const NodeMenuAtom = ({
   const [protocols, setProtocols] = useState<string[]>([]);
   const [selectedProtocol, setSelectedProtocol] = useState<string>("");
   const [protocolError, setProtocolError] = useState<string | null>(null);
+  const [entityFederationType, setEntityFederationType] = useState<string>("");
+
   
   useEffect(() => {
     const fetchProtocols = async () => {
@@ -209,6 +211,10 @@ export const NodeMenuAtom = ({
 
   console.log("entity type label", data.info.ec.payload.metadata);
 
+  useEffect(() => {
+    setEntityFederationType(data.info.type);
+  }, [data, entityFederationType]);
+
   return (
     <>
       <div className="row" data-testid="node-context-sidebar">
@@ -228,7 +234,7 @@ export const NodeMenuAtom = ({
                   {/* Selezione Protocollo */}
                   <div style={{ marginTop: "16px", padding: "12px", borderTop: "1px solid #dee2e6" }}>
                     <label style={{  marginBottom: "12px", display: "block" }}>
-                      Selezione Protocollo:
+                      Selezione Profilo:
                     </label>
                     
                    {protocolError ? (
@@ -386,6 +392,8 @@ export const NodeMenuAtom = ({
                 headerSchemaUrl={`${import.meta.env.VITE_ENTITY_HEADER_SCHEMA}`}
                 httpCapture={data.info.ec._httpCapture}
                 selectedProtocol={selectedProtocol}
+                type="EC"
+                entityFederationType={entityFederationType}
               />
             }
           />
@@ -415,7 +423,11 @@ export const NodeMenuAtom = ({
                             headerValidationFn={validateHeaderTrustMark}
                             schemaUrl={`${import.meta.env.VITE_TRUST_MARK_SCHEMA}`}
                             headerSchemaUrl={`${import.meta.env.VITE_ENTITY_HEADER_SCHEMA}`}
-                          />
+                            httpCapture={data.info.ec._httpCapture}
+                            selectedProtocol={selectedProtocol}
+                            type="TM"
+                            entityFederationType={entityFederationType}
+                         />
                         }
                       />
                     </div>
